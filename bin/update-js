@@ -4,8 +4,18 @@
 require_once __DIR__ . '/../../../autoload.php';
 
 use Symfony\Component\Console\Application;
-use emteknetnz\JsUpdater\Commands\UpdateJsCommand;
 
 $app = new Application();
-$app->add(new UpdateJsCommand());
+
+// Dynamically add all commands
+$commandsDir = __DIR__ . '/../src/Commands';
+$commandFiles = scandir($commandsDir);
+foreach ($commandFiles as $commandFile) {
+    if (!str_ends_with($commandFile, 'Command.php')) {
+        continue;
+    }
+    $class = 'emteknetnz\\JsUpdater\\Commands\\' . str_replace('.php', '', $commandFile);
+    $app->add(new $class);
+}
+
 $app->run();
