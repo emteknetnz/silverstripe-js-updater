@@ -17,8 +17,11 @@
         }
     },
     "bin": [
-        "bin/cli.php"
+        "bin/update-js"
     ],
+    "scripts": {
+        "update-js": "bin/update-js"
+    },
     "minimum-stability": "dev",
     "prefer-stable": true
 }
