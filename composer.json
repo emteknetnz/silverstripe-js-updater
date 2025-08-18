@@ -8,7 +8,7 @@
     ],
     "license": "MIT",
     "require": {
-        "silverstripe/supported-modules": "^2",
+        "silverstripe/supported-modules": "*",
         "symfony/console": "*"
     },
     "autoload": {
