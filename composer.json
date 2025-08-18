@@ -1,0 +1,24 @@
+{
+    "name": "emteknetnz/silverstripe-js-updater",
+    "type": "silverstripe-vendormodule",
+    "description": "JS Updater for Silverstripe CMS",
+    "keywords": [
+        "silverstripe",
+        "javascript"
+    ],
+    "license": "MIT",
+    "require": {
+        "silverstripe/supported-modules": "^2",
+        "symfony/console": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "emteknetnz\\JSU\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/cli.php"
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
