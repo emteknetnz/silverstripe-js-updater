@@ -4,6 +4,15 @@
 require_once __DIR__ . '/../../../autoload.php';
 
 use Symfony\Component\Console\Application;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\Config\FileLocator;
+
+$container = new ContainerBuilder();
+$fileLocator = new FileLocator(__DIR__ . '/../config/');
+$loader = new YamlFileLoader($container, $fileLocator);
+$loader->load('services.yml');
+$container->compile();
 
 $app = new Application();
 
@@ -15,7 +24,7 @@ foreach ($commandFiles as $commandFile) {
         continue;
     }
     $class = 'emteknetnz\\JsUpdater\\Commands\\' . str_replace('.php', '', $commandFile);
-    $app->add(new $class);
+    $app->add(new $class($container));
 }
 
 $app->run();

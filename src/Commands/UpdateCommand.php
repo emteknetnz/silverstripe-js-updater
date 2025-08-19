@@ -2,11 +2,11 @@
 
 namespace emteknetnz\JsUpdater\Commands;
 
+use emteknetnz\JsUpdater\Services\GitHubService;
 use InvalidArgumentException;
 use RuntimeException;
 use emteknetnz\JsUpdater\Services\ModuleService;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputArgument;
@@ -14,12 +14,14 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Dotenv\Dotenv;
+use Symfony\Component\Console\Command\Command;
+use Github\Client;
 
 #[AsCommand(
     name: 'update',
     description: 'Update supported modules in current project',
 )]
-class UpdateCommand extends Command
+class UpdateCommand extends BaseCommand
 {
     private OutputInterface $output;
 
@@ -35,6 +37,12 @@ class UpdateCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        /** @var Client $githubClient */
+        $githubClient = $this->container->get('Github\Client');
+        // todo check we're authenticated at this point
+        $githubService = new GitHubService($githubClient);
+        // $githubService->test();die;
+
         $this->output = $output;
         $this->loadEnv();
         // Validate input arg
@@ -50,7 +58,7 @@ class UpdateCommand extends Command
             $githubs = ['silverstripe-admin'];
         } else {
             $modules = array_filter(
-                (new ModuleService)->getSupportedJsModules('packgist'),
+                (new ModuleService)->getSupportedJsModules('packagist'),
                 fn($m) => $m !== 'silverstripe/admin'
             );
             $githubs = array_filter(

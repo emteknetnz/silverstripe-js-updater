@@ -4,7 +4,6 @@ namespace emteknetnz\JsUpdater\Commands;
 
 use emteknetnz\JsUpdater\Services\ModuleService;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -12,7 +11,7 @@ use Symfony\Component\Console\Output\OutputInterface;
     name: 'show',
     description: 'Show all supported modules in current project with a package.json file',
 )]
-class ShowCommand extends Command
+class ShowCommand extends BaseCommand
 {
     protected function configure(): void
     {
