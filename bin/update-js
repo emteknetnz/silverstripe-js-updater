@@ -4,6 +4,10 @@
 require_once __DIR__ . '/../../../autoload.php';
 
 use Symfony\Component\Console\Application;
+use Symfony\Component\Dotenv\Dotenv;
+
+$baseDir = dirname(dirname(dirname(dirname(__DIR__))));
+(new Dotenv)->bootEnv("$baseDir/.env");
 
 $app = new Application();
 

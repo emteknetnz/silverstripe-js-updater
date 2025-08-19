@@ -2,18 +2,15 @@
     "name": "emteknetnz/silverstripe-js-updater",
     "type": "silverstripe-vendormodule",
     "description": "JS Updater for Silverstripe CMS",
-    "keywords": [
-        "silverstripe",
-        "javascript"
-    ],
     "license": "MIT",
     "require": {
+        "knplabs/github-api": "*",
+        "nyholm/psr7": "*",
         "silverstripe/supported-modules": "*",
         "symfony/console": "*",
         "symfony/process": "*",
-        "knplabs/github-api": "*",
-        "symfony/http-client": "*",
-        "nyholm/psr7": "*"
+        "symfony/dotenv": "*",
+        "symfony/http-client": "*"
     },
     "autoload": {
         "psr-4": {

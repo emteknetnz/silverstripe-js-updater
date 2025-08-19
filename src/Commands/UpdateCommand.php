@@ -118,8 +118,7 @@ class UpdateCommand extends Command
             $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
             $this->runCommand("git push $tempOrigin $newBranch --set-upstream", $cwd);
             $this->runCommand("git remote remove $tempOrigin", $cwd);
-            // create pr via git api
-
+            // create pr via api
         }
         return Command::SUCCESS;
     }

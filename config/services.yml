@@ -1,0 +1,6 @@
+services:
+  Github\Client:
+    class: Github\Client
+    public: true
+    calls:
+      - [ authenticate, [ '%env(GITHUB_TOKEN)%', 'null', 'access_token' ] ]
