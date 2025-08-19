@@ -42,15 +42,20 @@ class UpdateCommand extends Command
         if (!in_array($which, ['admin', 'others'])) {
             throw new InvalidArgumentException('Argument must be "admin" or "others"');
         }
-        $admin = 'silverstripe/admin';
         // Set which modules will be updated based on input arg
         $modules = [];
+        $githubs = [];
         if ($which === 'admin') {
-            $modules = [$admin];
+            $modules = ['silverstripe/admin'];
+            $githubs = ['silverstripe-admin'];
         } else {
             $modules = array_filter(
-                (new ModuleService)->getSupportedJsModules(),
-                fn($m) => $m !== $admin
+                (new ModuleService)->getSupportedJsModules('packgist'),
+                fn($m) => $m !== 'silverstripe/admin'
+            );
+            $githubs = array_filter(
+                (new ModuleService)->getSupportedJsModules('github'),
+                fn($m) => $m !== 'silverstripe/silverstripe-admin'
             );
         }
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
@@ -58,18 +63,17 @@ class UpdateCommand extends Command
             /** @var QuestionHelper $helper */
             $helper = $this->getHelper('question');
             $question = new ConfirmationQuestion(
-                "<question>Is the $admin PR green in CI?</question> [y/n]</question>",
+                "<question>Is the silverstripe/admin PR green in CI?</question> [y/n]</question>",
                 false
             );
             if (!$helper->ask($input, $output, $question)) {
-                $message = "The $admin PR must be green in CI before updating other modules.";
-                $output->writeln("<comment>$message</comment>");
+                $message = "The silverstripe/admin PR must be green in CI before updating other modules";
+                $output->writeln("<error>$message</error>");
                 return Command::SUCCESS;
             }
         }
         // Validate all branches
         foreach ($modules as $module) {
-            $output->writeln("<info>Validating strating branch for $module</info>");
             $cwd = $this->getCwd($module);
 
             // temp hack
@@ -77,7 +81,7 @@ class UpdateCommand extends Command
                 continue;
             }
 
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             if (!preg_match('#^\d(\.\d)?$#', $currentBranch)) {
                 throw new RuntimeException("Starting branch for $cwd is $currentBranch, it must be either `x` or `x.y`");
             }
@@ -85,12 +89,15 @@ class UpdateCommand extends Command
 
         // Update module JS
         $homeDir = $this->getHomeDir();
-        foreach ($modules as $module) {
+        for ($i = 0; $i < count($modules); $i++) {
+            $module = $modules[$i];
+            $github = $githubs[$i];
+            $repoName = explode('/', $github)[1];
             $output->writeln("<info>Updating $module</info>");
             // remove yarn.lock if it exists
             $cwd = $this->getCwd($module);
             // validate git branch
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
             // run yarn build
             $command = implode(' && ', [
@@ -101,12 +108,18 @@ class UpdateCommand extends Command
             ]);
             $this->runCommand($command, $cwd);
             // git
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
-            $newBranch = "pulls/$currentBranch/update-js-" . time();
-            $this->runCommand('git checkout -b ', $cwd);
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+            $time = time();
+            $newBranch = "pulls/$currentBranch/update-js-$time";
+            $this->runCommand("git checkout -b $newBranch", $cwd);
             $this->runCommand('git add .', $cwd);
             $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
-            die;
+            $tempOrigin = "ccs-temp-$time'";
+            $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
+            $this->runCommand("git push $tempOrigin $newBranch --set-upstream", $cwd);
+            $this->runCommand("git remote remove $tempOrigin", $cwd);
+            // create pr via git api
+
         }
         return Command::SUCCESS;
     }
@@ -120,13 +133,17 @@ class UpdateCommand extends Command
     /**
      * Run a command and output its results
      */
-    private function runCommand(string $command, string $cwd): string
+    private function runCommand(string $command, string $cwd, bool $writeOut = true): string
     {
         $result = '';
-        $this->output->writeln("Running command: $command");
+        if ($writeOut) {
+            $this->output->writeln("<comment>$command</comment>");
+        }
         $process = Process::fromShellCommandline($command, $cwd);
-        $process->run(function (string $type, string $buffer) use (&$result) {
-            $this->output->write($buffer);
+        $process->run(function (string $type, string $buffer) use ($writeOut, &$result) {
+            if ($writeOut) {
+                $this->output->write($buffer);
+            }
             $result .= $buffer;
         });
         $code = $process->getExitCode();

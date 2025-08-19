@@ -10,7 +10,10 @@
     "require": {
         "silverstripe/supported-modules": "*",
         "symfony/console": "*",
-        "symfony/process": "*"
+        "symfony/process": "*",
+        "knplabs/github-api": "*",
+        "symfony/http-client": "*",
+        "nyholm/psr7": "*"
     },
     "autoload": {
         "psr-4": {
