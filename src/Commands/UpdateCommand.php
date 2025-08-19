@@ -30,12 +30,24 @@ class UpdateCommand extends BaseCommand
         $this->addArgument(
             'which',
             InputArgument::REQUIRED,
-            description: "'admin' to update $admin only, or 'others' to update all modules except for $admin",
+            "'admin' to update $admin only, or 'others' to update all modules except for $admin",
         );
         $this->addArgument(
             'githubIssueUrl',
             InputArgument::REQUIRED,
-            description: 'GitHub url of the parent issue',
+            'GitHub url of the parent issue',
+        );
+        $this->addOption(
+            'only',
+            'o',
+            InputArgument::OPTIONAL,
+            'Comma seperated list of repos to only run on e.g. silverstripe-elemental,silverstipe-asset-admin',
+        );
+        $this->addOption(
+            'exclude',
+            'e',
+            InputArgument::OPTIONAL,
+            'Comma seperated list of repos to exclude e.g. silverstripe-elemental,silverstipe-asset-admin',
         );
     }
 
@@ -68,8 +80,8 @@ class UpdateCommand extends BaseCommand
         // Update module JS
         foreach ($modules as $module) {
             $cwd = $this->getCwd($module);
-            $github = $moduleService->getGitHubFromModule($module);
-            $repoName = explode('/', $github)[1];
+            $ghrepo = $moduleService->getGitHubFromModule($module);
+            $repoName = explode('/', $ghrepo)[1];
             $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $output->writeln("<info>Updating $module</info>");
             // remove yarn.lock if it exists
@@ -95,10 +107,11 @@ class UpdateCommand extends BaseCommand
             $this->runCommand("git remote remove $tempOrigin", $cwd);
             // create pr via github api
             $this->container->get(GitHubService::class)->createPullRequest(
-                $module,
+                $ghrepo,
                 $githubIssueUrl,
                 $headBranch,
                 $baseBranch,
+                $output,
             );
         }
         return Command::SUCCESS;
