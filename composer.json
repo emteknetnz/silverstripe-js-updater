@@ -10,7 +10,9 @@
         "symfony/console": "*",
         "symfony/process": "*",
         "symfony/dotenv": "*",
-        "symfony/http-client": "*"
+        "symfony/http-client": "*",
+        "symfony/config": "*",
+        "symfony/yaml": "*"
     },
     "autoload": {
         "psr-4": {

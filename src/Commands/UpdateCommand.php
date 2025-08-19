@@ -2,11 +2,9 @@
 
 namespace emteknetnz\JsUpdater\Commands;
 
-use AsyncPHP\Doorman\Shell\BashShell;
 use InvalidArgumentException;
-use emteknetnz\JsUpdater\Services\ModuleService;
 use RuntimeException;
-use SpomkyLabs\Pki\ASN1\Type\Primitive\EOC;
+use emteknetnz\JsUpdater\Services\ModuleService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\QuestionHelper;
@@ -15,6 +13,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Dotenv\Dotenv;
 
 #[AsCommand(
     name: 'update',
@@ -37,6 +36,7 @@ class UpdateCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->output = $output;
+        $this->loadEnv();
         // Validate input arg
         $which = $input->getArgument('which');
         if (!in_array($which, ['admin', 'others'])) {
@@ -86,7 +86,6 @@ class UpdateCommand extends Command
                 throw new RuntimeException("Starting branch for $cwd is $currentBranch, it must be either `x` or `x.y`");
             }
         }
-
         // Update module JS
         $homeDir = $this->getHomeDir();
         for ($i = 0; $i < count($modules); $i++) {
@@ -121,6 +120,19 @@ class UpdateCommand extends Command
             // create pr via api
         }
         return Command::SUCCESS;
+    }
+
+    private function loadEnv(): void
+    {
+        $baseDir = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
+        $dotenv = new Dotenv;
+        $dotenv->load("$baseDir/.env");
+        // I don't know the correct way to get dotenv to allow passing in GITHUB_TOKEN=<token> vendor/bin/update-js
+        $dotenv->populate(['GITHUB_TOKEN' => getenv('GITHUB_TOKEN')], true);
+        if (empty($_ENV['GITHUB_TOKEN'])) {
+            $this->output->writeln('<error>env var GITHUB_TOKEN is missing</error>');
+            exit(1);
+        }
     }
 
     private function getCwd(string $module)
