@@ -15,7 +15,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\Console\Command\Command;
-use Github\Client;
 
 #[AsCommand(
     name: 'update',
@@ -33,39 +32,25 @@ class UpdateCommand extends BaseCommand
             InputArgument::REQUIRED,
             description: "'admin' to update $admin only, or 'others' to update all modules except for $admin",
         );
+        $this->addArgument(
+            'githubIssueUrl',
+            InputArgument::REQUIRED,
+            description: 'GitHub url of the parent issue',
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        /** @var Client $githubClient */
-        $githubClient = $this->container->get('Github\Client');
-        // todo check we're authenticated at this point
-        $githubService = new GitHubService($githubClient);
-        // $githubService->test();die;
-
         $this->output = $output;
         $this->loadEnv();
-        // Validate input arg
+        $this->validateInputs($input);
         $which = $input->getArgument('which');
-        if (!in_array($which, ['admin', 'others'])) {
-            throw new InvalidArgumentException('Argument must be "admin" or "others"');
-        }
+        $githubIssueUrl = $input->getArgument('githubIssueUrl');
+        $modules = $this->getModules($which);
+        $homeDir = $this->getHomeDir();
+        $moduleService = $this->container->get(ModuleService::class);
+        $this->validateBranches($modules);
         // Set which modules will be updated based on input arg
-        $modules = [];
-        $githubs = [];
-        if ($which === 'admin') {
-            $modules = ['silverstripe/admin'];
-            $githubs = ['silverstripe-admin'];
-        } else {
-            $modules = array_filter(
-                (new ModuleService)->getSupportedJsModules('packagist'),
-                fn($m) => $m !== 'silverstripe/admin'
-            );
-            $githubs = array_filter(
-                (new ModuleService)->getSupportedJsModules('github'),
-                fn($m) => $m !== 'silverstripe/silverstripe-admin'
-            );
-        }
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
         if ($which == 'others') {
             /** @var QuestionHelper $helper */
@@ -80,31 +65,14 @@ class UpdateCommand extends BaseCommand
                 return Command::SUCCESS;
             }
         }
-        // Validate all branches
+        // Update module JS
         foreach ($modules as $module) {
             $cwd = $this->getCwd($module);
-
-            // temp hack
-            if ($module == 'silverstripe/campaign-admin') {
-                continue;
-            }
-
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
-            if (!preg_match('#^\d(\.\d)?$#', $currentBranch)) {
-                throw new RuntimeException("Starting branch for $cwd is $currentBranch, it must be either `x` or `x.y`");
-            }
-        }
-        // Update module JS
-        $homeDir = $this->getHomeDir();
-        for ($i = 0; $i < count($modules); $i++) {
-            $module = $modules[$i];
-            $github = $githubs[$i];
+            $github = $moduleService->getGitHubFromModule($module);
             $repoName = explode('/', $github)[1];
+            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $output->writeln("<info>Updating $module</info>");
             // remove yarn.lock if it exists
-            $cwd = $this->getCwd($module);
-            // validate git branch
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
             // run yarn build
             $command = implode(' && ', [
@@ -114,20 +82,65 @@ class UpdateCommand extends BaseCommand
                 'yarn build'
             ]);
             $this->runCommand($command, $cwd);
-            // git
-            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+            // git operations
+            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $time = time();
-            $newBranch = "pulls/$currentBranch/update-js-$time";
-            $this->runCommand("git checkout -b $newBranch", $cwd);
+            $headBranch = "pulls/$baseBranch/update-js-$time";
+            $this->runCommand("git checkout -b $headBranch", $cwd);
             $this->runCommand('git add .', $cwd);
             $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
-            $tempOrigin = "ccs-temp-$time'";
+            $tempOrigin = "ccs-temp-$time";
             $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
-            $this->runCommand("git push $tempOrigin $newBranch --set-upstream", $cwd);
+            $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
             $this->runCommand("git remote remove $tempOrigin", $cwd);
-            // create pr via api
+            // create pr via github api
+            $this->container->get(GitHubService::class)->createPullRequest(
+                $module,
+                $githubIssueUrl,
+                $headBranch,
+                $baseBranch,
+            );
         }
         return Command::SUCCESS;
+    }
+
+    private function validateBranches(array $modules): void
+    {
+        foreach ($modules as $module) {
+            $cwd = $this->getCwd($module);
+            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+            if (!preg_match('#^\d(\.\d)?$#', $baseBranch)) {
+                throw new RuntimeException("Starting branch for $cwd is $baseBranch, it must be either `x` or `x.y`");
+            }
+        }
+    }
+
+    private function validateInputs(InputInterface $input): void
+    {
+        $which = $input->getArgument('which');
+        if (!in_array($which, ['admin', 'others'])) {
+            throw new InvalidArgumentException('Argument `which` must be "admin" or "others"');
+        }
+        $githubIssueUrl = $input->getArgument('githubIssueUrl');
+        $rx = '#^https://github.com/([a-zA-Z0-9_\-]+)/([a-zA-Z0-9_\-\.]+)/issues/(\d+)$#';
+        if (!preg_match($rx, $githubIssueUrl)) {
+            throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid github issue url');
+        }
+    }
+
+    private function getModules(string $which): array
+    {
+        $modules = [];
+        if ($which === 'admin') {
+            $modules = ['silverstripe/admin'];
+        } else {
+            $moduleService = $this->container->get(ModuleService::class);
+            $modules = array_filter(
+                $moduleService->getSupportedJsModules('packagist'),
+                fn($m) => $m !== 'silverstripe/admin'
+            );
+        }
+        return $modules;
     }
 
     private function loadEnv(): void

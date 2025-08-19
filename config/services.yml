@@ -1,6 +1,12 @@
 services:
+
+  _defaults:
+    public: true
+    autowire: true
+
   Github\Client:
     class: Github\Client
-    public: true
     calls:
       - [ authenticate, [ '%env(GITHUB_TOKEN)%', 'null', 'access_token' ] ]
+
+  emteknetnz\JsUpdater\Services\ModuleService: ~

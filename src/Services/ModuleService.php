@@ -7,33 +7,38 @@ use SilverStripe\SupportedModules\MetaData;
 
 class ModuleService
 {
+    private array $metadata;
+
+    public function __construct()
+    {
+        $this->metadata = MetaData::getAllRepositoryMetaData();
+    }
+
     /**
      * Return an array of all supported modules with a package.json file that exist in a vendor folder
-     *
-     * @return array<string>
      */
-    function getSupportedJsModules(string $as = 'packagist'): array
+    public function getSupportedJsModules(): array
     {
-        if (!in_array($as, ['packagist', 'github', 'github_url'])) {
-            throw new InvalidArgumentException('Unsupported $as value: ' . $as);
-        }
         $vendorDir = dirname(dirname(dirname(dirname(__DIR__))));
         $modules = [];
-        $metadata = MetaData::getAllRepositoryMetaData();
-        foreach ($metadata['supportedModules'] as $data) {
+        foreach ($this->metadata['supportedModules'] as $data) {
             $subdir = $data['packagist'];
             if (!file_exists("$vendorDir/$subdir/package.json")) {
                 continue;
             }
-            if ($as === 'packagist') {
-                $modules[] = $data['packagist'];
-            } else if ($as === 'github') {
-                $modules[] = $data['github'];
-            } else if ($as === 'github_url') {
-                $modules[] = "https://github.com/{$data['github']}";
-            }
+            $modules[] = $data['packagist'];
         }
         sort($modules);
         return $modules;
+    }
+
+    public function getGitHubFromModule(string $module)
+    {
+        foreach ($this->metadata['supportedModules'] as $data) {
+            if ($data['packagist'] === $module) {
+                return $data['github'];
+            }
+        }
+        throw new InvalidArgumentException("Module '$module' was not found in metadata");
     }
 }
