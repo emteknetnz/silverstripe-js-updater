@@ -9,7 +9,8 @@
     "license": "MIT",
     "require": {
         "silverstripe/supported-modules": "*",
-        "symfony/console": "*"
+        "symfony/console": "*",
+        "symfony/process": "*"
     },
     "autoload": {
         "psr-4": {

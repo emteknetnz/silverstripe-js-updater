@@ -1,0 +1,150 @@
+<?php
+
+namespace emteknetnz\JsUpdater\Commands;
+
+use AsyncPHP\Doorman\Shell\BashShell;
+use InvalidArgumentException;
+use emteknetnz\JsUpdater\Services\ModuleService;
+use RuntimeException;
+use SpomkyLabs\Pki\ASN1\Type\Primitive\EOC;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\QuestionHelper;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Question\ConfirmationQuestion;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
+
+#[AsCommand(
+    name: 'update',
+    description: 'Update supported modules in current project',
+)]
+class UpdateCommand extends Command
+{
+    private OutputInterface $output;
+
+    protected function configure(): void
+    {
+        $admin = 'silverstripe/admin';
+        $this->addArgument(
+            'which',
+            InputArgument::REQUIRED,
+            description: "'admin' to update $admin only, or 'others' to update all modules except for $admin",
+        );
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $this->output = $output;
+        // Validate input arg
+        $which = $input->getArgument('which');
+        if (!in_array($which, ['admin', 'others'])) {
+            throw new InvalidArgumentException('Argument must be "admin" or "others"');
+        }
+        $admin = 'silverstripe/admin';
+        // Set which modules will be updated based on input arg
+        $modules = [];
+        if ($which === 'admin') {
+            $modules = [$admin];
+        } else {
+            $modules = array_filter(
+                (new ModuleService)->getSupportedJsModules(),
+                fn($m) => $m !== $admin
+            );
+        }
+        // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
+        if ($which == 'others') {
+            /** @var QuestionHelper $helper */
+            $helper = $this->getHelper('question');
+            $question = new ConfirmationQuestion(
+                "<question>Is the $admin PR green in CI?</question> [y/n]</question>",
+                false
+            );
+            if (!$helper->ask($input, $output, $question)) {
+                $message = "The $admin PR must be green in CI before updating other modules.";
+                $output->writeln("<comment>$message</comment>");
+                return Command::SUCCESS;
+            }
+        }
+        // Validate all branches
+        foreach ($modules as $module) {
+            $output->writeln("<info>Validating strating branch for $module</info>");
+            $cwd = $this->getCwd($module);
+
+            // temp hack
+            if ($module == 'silverstripe/campaign-admin') {
+                continue;
+            }
+
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
+            if (!preg_match('#^\d(\.\d)?$#', $currentBranch)) {
+                throw new RuntimeException("Starting branch for $cwd is $currentBranch, it must be either `x` or `x.y`");
+            }
+        }
+
+        // Update module JS
+        $homeDir = $this->getHomeDir();
+        foreach ($modules as $module) {
+            $output->writeln("<info>Updating $module</info>");
+            // remove yarn.lock if it exists
+            $cwd = $this->getCwd($module);
+            // validate git branch
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
+            $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
+            // run yarn build
+            $command = implode(' && ', [
+                'export NVM_DIR=' . $homeDir . '/.nvm',
+                '. $NVM_DIR/nvm.sh',
+                'nvm use',
+                'yarn build'
+            ]);
+            $this->runCommand($command, $cwd);
+            // git
+            $currentBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd);
+            $newBranch = "pulls/$currentBranch/update-js-" . time();
+            $this->runCommand('git checkout -b ', $cwd);
+            $this->runCommand('git add .', $cwd);
+            $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
+            die;
+        }
+        return Command::SUCCESS;
+    }
+
+    private function getCwd(string $module)
+    {
+        $vendorDir = dirname(dirname(dirname(dirname(__DIR__))));
+        return "$vendorDir/$module";
+    }
+
+    /**
+     * Run a command and output its results
+     */
+    private function runCommand(string $command, string $cwd): string
+    {
+        $result = '';
+        $this->output->writeln("Running command: $command");
+        $process = Process::fromShellCommandline($command, $cwd);
+        $process->run(function (string $type, string $buffer) use (&$result) {
+            $this->output->write($buffer);
+            $result .= $buffer;
+        });
+        $code = $process->getExitCode();
+        if ($code !== 0) {
+            throw new RuntimeException("Process returned exit code $code");
+        }
+        return trim($result);
+    }
+
+    /**
+     * Get the users home dir, only works on unix-like systems (Linux, macOS)
+     */
+    private function getHomeDir(): ?string
+    {
+        $home = getenv('HOME');
+        if (empty($home)) {
+            throw new RuntimeException('Could not get HOME dir');
+        }
+        return $home;
+    }
+}
