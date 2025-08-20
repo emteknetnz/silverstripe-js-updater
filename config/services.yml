@@ -1,13 +1,12 @@
+parameters:
+  github_token: '%env(SS_HOST)%'
+
 services:
 
   _defaults:
     public: true
     autowire: true
 
-  Github\Client:
-    class: Github\Client
-    calls:
-      - [ authenticate, [ '%env(GITHUB_TOKEN)%', 'null', 'access_token_header' ] ]
-
+  Github\Client: ~
   emteknetnz\JsUpdater\Services\GitHubService: ~
   emteknetnz\JsUpdater\Services\ModuleService: ~

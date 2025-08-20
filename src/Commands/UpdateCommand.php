@@ -6,6 +6,7 @@ use emteknetnz\JsUpdater\Services\GitHubService;
 use InvalidArgumentException;
 use RuntimeException;
 use emteknetnz\JsUpdater\Services\ModuleService;
+use Intervention\Image\Interfaces\InputHandlerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
@@ -22,6 +23,7 @@ use Symfony\Component\Console\Command\Command;
 )]
 class UpdateCommand extends BaseCommand
 {
+    private InputInterface $input;
     private OutputInterface $output;
 
     protected function configure(): void
@@ -53,15 +55,26 @@ class UpdateCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        /** @var GitHubService $service */
+        $service = $this->container->get(GitHubService::class);
+        $service->createPullRequest(
+            'silverstripe/silverstripe-asset-admin',
+            'https://github.com/silverstripe/.github/issues/436',
+            'creative-commoners:pulls/3/update-js-1755649157',
+            '3',
+            $output
+        );
+        die;
+
+        $this->input = $input;
         $this->output = $output;
-        $this->loadEnv();
         $this->validateInputs($input);
         $which = $input->getArgument('which');
         $githubIssueUrl = $input->getArgument('githubIssueUrl');
-        $modules = $this->getModules($which);
         $homeDir = $this->getHomeDir();
-        $moduleService = $this->container->get(ModuleService::class);
+        $modules = $this->getModules($input);
         $this->validateBranches($modules);
+        $moduleService = $this->container->get(ModuleService::class);
         // Set which modules will be updated based on input arg
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
         if ($which == 'others') {
@@ -98,6 +111,7 @@ class UpdateCommand extends BaseCommand
             $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
             $time = time();
             $headBranch = "pulls/$baseBranch/update-js-$time";
+            // todo: this should be done BEFORE updating JS, in-case of accidental push on broken something
             $this->runCommand("git checkout -b $headBranch", $cwd);
             $this->runCommand('git add .', $cwd);
             $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
@@ -119,6 +133,7 @@ class UpdateCommand extends BaseCommand
 
     private function validateBranches(array $modules): void
     {
+        // todo: validate that if 'others', that admin branchs in pulls/3/... 
         foreach ($modules as $module) {
             $cwd = $this->getCwd($module);
             $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
@@ -128,45 +143,49 @@ class UpdateCommand extends BaseCommand
         }
     }
 
-    private function validateInputs(InputInterface $input): void
+    private function validateInputs(): void
     {
-        $which = $input->getArgument('which');
+        $which = $this->input->getArgument('which');
         if (!in_array($which, ['admin', 'others'])) {
             throw new InvalidArgumentException('Argument `which` must be "admin" or "others"');
         }
-        $githubIssueUrl = $input->getArgument('githubIssueUrl');
+        $githubIssueUrl = $this->input->getArgument('githubIssueUrl');
         $rx = '#^https://github.com/([a-zA-Z0-9_\-]+)/([a-zA-Z0-9_\-\.]+)/issues/(\d+)$#';
         if (!preg_match($rx, $githubIssueUrl)) {
             throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid github issue url');
         }
     }
 
-    private function getModules(string $which): array
+    /**
+     * Get an array of modules aka packagist identifiers e.g. silverstripe/asset-admin
+     */
+    private function getModules(): array
     {
-        $modules = [];
+        $which = $this->input->getArgument('which');
         if ($which === 'admin') {
-            $modules = ['silverstripe/admin'];
-        } else {
-            $moduleService = $this->container->get(ModuleService::class);
-            $modules = array_filter(
-                $moduleService->getSupportedJsModules('packagist'),
-                fn($m) => $m !== 'silverstripe/admin'
-            );
+            return ['silverstripe/admin'];
         }
-        return $modules;
-    }
-
-    private function loadEnv(): void
-    {
-        $baseDir = dirname(dirname(dirname(dirname(dirname(__DIR__)))));
-        $dotenv = new Dotenv;
-        $dotenv->load("$baseDir/.env");
-        // I don't know the correct way to get dotenv to allow passing in GITHUB_TOKEN=<token> vendor/bin/update-js
-        $dotenv->populate(['GITHUB_TOKEN' => getenv('GITHUB_TOKEN')], true);
-        if (empty($_ENV['GITHUB_TOKEN'])) {
-            $this->output->writeln('<error>env var GITHUB_TOKEN is missing</error>');
-            exit(1);
-        }
+        $only = array_filter(explode(',', $this->input->getOption('only') ?: ''));
+        $exclude = array_filter(explode(',', $this->input->getOption('exclude') ?: ''));
+        /** @var ModuleService $moduleService */
+        $moduleService = $this->container->get(ModuleService::class);
+        return array_filter(
+            $moduleService->getSupportedJsModules('packagist'),
+            function (string $module) use ($moduleService, $only, $exclude) {
+                if ($module === 'siverstripe/admin') {
+                    return false;
+                }
+                $ghrepo = $moduleService->getGitHubFromModule($module);
+                $repoName = explode('/', $ghrepo)[1];
+                if (!empty($only) && !in_array($module, $only) && !in_array($ghrepo, $only) && !in_array($repoName, $only)) {
+                    return false;
+                }
+                if (!empty($exclude) && (in_array($module, $exclude) || in_array($ghrepo, $exclude) || in_array($repoName, $exclude))) {
+                    return false;
+                }
+                return true;
+            }
+        );
     }
 
     private function getCwd(string $module)
@@ -185,6 +204,7 @@ class UpdateCommand extends BaseCommand
             $this->output->writeln("<comment>$command</comment>");
         }
         $process = Process::fromShellCommandline($command, $cwd);
+        $process->setTimeout(180);
         $process->run(function (string $type, string $buffer) use ($writeOut, &$result) {
             if ($writeOut) {
                 $this->output->write($buffer);

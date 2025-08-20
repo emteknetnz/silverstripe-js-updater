@@ -41,4 +41,14 @@ class ModuleService
         }
         throw new InvalidArgumentException("Module '$module' was not found in metadata");
     }
+
+    public function getModuleFromGitHub(string $github)
+    {
+        foreach ($this->metadata['supportedModules'] as $data) {
+            if ($data['github'] === $github) {
+                return $data['packagist'];
+            }
+        }
+        throw new InvalidArgumentException("GitHub '$github' was not found in metadata");
+    }
 }

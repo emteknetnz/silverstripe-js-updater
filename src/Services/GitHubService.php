@@ -5,6 +5,7 @@ namespace emteknetnz\JsUpdater\Services;
 use Github\Client;
 use Github\Api\PullRequest;
 use Symfony\Component\Console\Output\OutputInterface;
+use Github\AuthMethod;
 
 class GitHubService
 {
@@ -24,6 +25,7 @@ class GitHubService
     public function __construct(
         private Client $githubClient
     ) {
+        $this->githubClient->authenticate($_ENV['GITHUB_TOKEN'], null, AuthMethod::ACCESS_TOKEN);
     }
 
     public function createPullRequest(
@@ -38,7 +40,9 @@ class GitHubService
             $account = 'silverstripe';
         }
         $forkAccount = GitHubService::FORK_GITHUB_ACCOUNT;
-        $output->writeln("<info>Creating pull request to $account/$repoName</info>");
+        $head = "$forkAccount:$headBranch";
+        $message = "Creating pull request to '$account/$repoName' with head '$head' and base '$baseBranch'";
+        $output->writeln("<info>$message</info>");
         /** @var PullRequest $pullRequest */
         $pullRequest = $this->githubClient->api('pull_request');
         $pullRequest->create($account, $repoName, [
