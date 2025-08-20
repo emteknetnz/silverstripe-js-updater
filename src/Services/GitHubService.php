@@ -34,7 +34,7 @@ class GitHubService
         string $headBranch,
         string $baseBranch,
         OutputInterface $output,
-    ): void {
+    ): array {
         [$account, $repoName] = explode('/', $ghrepo);
         if ($account !== 'silverstripe' && !in_array($ghrepo, GitHubService::NON_MIGRATED_GH_REPOS)) {
             $account = 'silverstripe';
@@ -45,7 +45,7 @@ class GitHubService
         $output->writeln("<info>$message</info>");
         /** @var PullRequest $pullRequest */
         $pullRequest = $this->githubClient->api('pull_request');
-        $pullRequest->create($account, $repoName, [
+        return $pullRequest->create($account, $repoName, [
             'title' => GitHubService::PR_TITLE,
             'body' => $this->getBody($githubIssueUrl),
             'head' => "$forkAccount:$headBranch",

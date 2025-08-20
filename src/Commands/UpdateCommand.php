@@ -25,6 +25,8 @@ class UpdateCommand extends BaseCommand
 {
     private InputInterface $input;
     private OutputInterface $output;
+    private array $processedModules = [];
+    private array $prUrls = [];
 
     protected function configure(): void
     {
@@ -55,17 +57,6 @@ class UpdateCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        /** @var GitHubService $service */
-        $service = $this->container->get(GitHubService::class);
-        $service->createPullRequest(
-            'silverstripe/silverstripe-asset-admin',
-            'https://github.com/silverstripe/.github/issues/436',
-            'creative-commoners:pulls/3/update-js-1755649157',
-            '3',
-            $output
-        );
-        die;
-
         $this->input = $input;
         $this->output = $output;
         $this->validateInputs($input);
@@ -90,43 +81,55 @@ class UpdateCommand extends BaseCommand
                 return Command::SUCCESS;
             }
         }
-        // Update module JS
-        foreach ($modules as $module) {
-            $cwd = $this->getCwd($module);
-            $ghrepo = $moduleService->getGitHubFromModule($module);
-            $repoName = explode('/', $ghrepo)[1];
-            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
-            $output->writeln("<info>Updating $module</info>");
-            // remove yarn.lock if it exists
-            $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
-            // run yarn build
-            $command = implode(' && ', [
-                'export NVM_DIR=' . $homeDir . '/.nvm',
-                '. $NVM_DIR/nvm.sh',
-                'nvm use',
-                'yarn build'
-            ]);
-            $this->runCommand($command, $cwd);
-            // git operations
-            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
-            $time = time();
-            $headBranch = "pulls/$baseBranch/update-js-$time";
-            // todo: this should be done BEFORE updating JS, in-case of accidental push on broken something
-            $this->runCommand("git checkout -b $headBranch", $cwd);
-            $this->runCommand('git add .', $cwd);
-            $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
-            $tempOrigin = "ccs-temp-$time";
-            $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
-            $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
-            $this->runCommand("git remote remove $tempOrigin", $cwd);
-            // create pr via github api
-            $this->container->get(GitHubService::class)->createPullRequest(
-                $ghrepo,
-                $githubIssueUrl,
-                $headBranch,
-                $baseBranch,
-                $output,
-            );
+        try {
+            // Update module JS
+            foreach ($modules as $module) {
+                $cwd = $this->getCwd($module);
+                $ghrepo = $moduleService->getGitHubFromModule($module);
+                $repoName = explode('/', $ghrepo)[1];
+                $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+                $output->writeln("<info>Updating $module</info>");
+                // remove yarn.lock if it exists
+                $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
+                // run yarn build
+                $command = implode(' && ', [
+                    'export NVM_DIR=' . $homeDir . '/.nvm',
+                    '. $NVM_DIR/nvm.sh',
+                    'nvm use',
+                    'yarn build'
+                ]);
+                $this->runCommand($command, $cwd);
+                // git operations
+                $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+                $time = time();
+                $headBranch = "pulls/$baseBranch/update-js-$time";
+                // todo: this should be done BEFORE updating JS, in-case of accidental push on broken something
+                $this->runCommand("git checkout -b $headBranch", $cwd);
+                $this->runCommand('git add .', $cwd);
+                $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
+                $tempOrigin = "ccs-temp-$time";
+                $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
+                $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
+                $this->runCommand("git remote remove $tempOrigin", $cwd);
+                // create pr via github api
+                $result = $this->container->get(GitHubService::class)->createPullRequest(
+                    $ghrepo,
+                    $githubIssueUrl,
+                    $headBranch,
+                    $baseBranch,
+                    $output,
+                );
+                $this->processedModules[] = $module;
+                $this->prUrls[] = $result['url'];
+            }
+        } finally {
+            $output->writeln('<info>The following modules has PRs created (add to --exclude if running again):</info>');
+            $processed = implode(',', $this->processedModules);
+            $output->writeln("$processed");
+            $output->writeln('<info>Created the following PRs:</info>');
+            foreach ($this->prUrls as $url) {
+                $output->writeln("- $url");
+            }
         }
         return Command::SUCCESS;
     }
