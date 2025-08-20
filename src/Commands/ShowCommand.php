@@ -4,6 +4,7 @@ namespace emteknetnz\JsUpdater\Commands;
 
 use emteknetnz\JsUpdater\Services\ModuleService;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -13,6 +14,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 )]
 class ShowCommand extends BaseCommand
 {
+    /**
+     * Defines the command options.
+     */
     protected function configure(): void
     {
         $this->addOption(
@@ -22,6 +26,9 @@ class ShowCommand extends BaseCommand
         );
     }
 
+    /**
+     * Outputs a list of supported modules.
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $as = $input->getOption('github') ? 'github' : 'packagist';

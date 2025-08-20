@@ -4,13 +4,19 @@ namespace emteknetnz\JsUpdater\Services;
 
 use Github\Client;
 use Github\Api\PullRequest;
-use Symfony\Component\Console\Output\OutputInterface;
 use Github\AuthMethod;
+use Symfony\Component\Console\Output\OutputInterface;
 
 class GitHubService
 {
+    /**
+     * This is the github account that forks are made to
+     */
     private const FORK_GITHUB_ACCOUNT = 'creative-commoners';
 
+    /**
+     * This is the title of the pull request
+     */
     private const PR_TITLE = 'DEP Update JS dependencies';
 
     /**
@@ -22,12 +28,21 @@ class GitHubService
         'tractorcow-farm/silverstripe-fluent',
     ];
 
+    /**
+     * Authenticates the GitHub client.
+     */
     public function __construct(
+        /**
+         * An instance of the GitHub client
+         */
         private Client $githubClient
     ) {
         $this->githubClient->authenticate($_ENV['GITHUB_TOKEN'], null, AuthMethod::ACCESS_TOKEN);
     }
 
+    /**
+     * Creates a pull request on GitHub to the silverstripe account or a non-migrated repo.
+     */
     public function createPullRequest(
         string $ghrepo,
         string $githubIssueUrl,
@@ -53,6 +68,9 @@ class GitHubService
         ]);
     }
 
+    /**
+     * Gets the body for a pull request
+     */
     private function getBody(string $githubIssueUrl): string
     {
         return <<<TEXT

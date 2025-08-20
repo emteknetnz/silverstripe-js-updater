@@ -2,20 +2,18 @@
 
 namespace emteknetnz\JsUpdater\Commands;
 
-use emteknetnz\JsUpdater\Services\GitHubService;
 use InvalidArgumentException;
 use RuntimeException;
+use emteknetnz\JsUpdater\Services\GitHubService;
 use emteknetnz\JsUpdater\Services\ModuleService;
-use Intervention\Image\Interfaces\InputHandlerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\QuestionHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Dotenv\Dotenv;
-use Symfony\Component\Console\Command\Command;
 
 #[AsCommand(
     name: 'update',
@@ -23,11 +21,29 @@ use Symfony\Component\Console\Command\Command;
 )]
 class UpdateCommand extends BaseCommand
 {
+    /**
+     * An instance of InputInterface
+     */
     private InputInterface $input;
-    private OutputInterface $output;
-    private array $processedModules = [];
-    private array $prUrls = [];
 
+    /**
+     * An instance of OutputInterface
+     */
+    private OutputInterface $output;
+
+    /**
+     * A list of modules that have been processed
+     */
+    private array $processedModules = [];
+
+    /**
+     * A list of pull request URLs that have been created
+     */
+    private array $pullRequestUrls = [];
+
+    /**
+     * Defines the command arguments and options.
+     */
     protected function configure(): void
     {
         $admin = 'silverstripe/admin';
@@ -45,22 +61,33 @@ class UpdateCommand extends BaseCommand
             'only',
             'o',
             InputArgument::OPTIONAL,
-            'Comma seperated list of repos to only run on e.g. silverstripe-elemental,silverstipe-asset-admin',
+            'Comma-separated list of repos to only run on, e.g., silverstripe-elemental,silverstripe-asset-admin',
         );
         $this->addOption(
             'exclude',
             'e',
             InputArgument::OPTIONAL,
-            'Comma seperated list of repos to exclude e.g. silverstripe-elemental,silverstipe-asset-admin',
+            'Comma-separated list of repos to exclude, e.g., silverstripe-elemental,silverstripe-asset-admin',
+        );
+        $this->addOption(
+            'dry-run',
+            'd',
+            InputArgument::OPTIONAL,
+            'Do not create pull requests',
         );
     }
 
+    /**
+     * Updates JavaScript dependencies, runs a build, and creates a pull request.
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->input = $input;
         $this->output = $output;
+        $this->validateEnv();
         $this->validateInputs($input);
         $which = $input->getArgument('which');
+        $dryRun = $input->getOption('dry-run');
         $githubIssueUrl = $input->getArgument('githubIssueUrl');
         $homeDir = $this->getHomeDir();
         $modules = $this->getModules($input);
@@ -89,9 +116,14 @@ class UpdateCommand extends BaseCommand
                 $repoName = explode('/', $ghrepo)[1];
                 $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
                 $output->writeln("<info>Updating $module</info>");
-                // remove yarn.lock if it exists
+                // Checkout new git branch before making any changes
+                $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+                $time = time();
+                $headBranch = "pulls/$baseBranch/update-js-$time";
+                $this->runCommand("git checkout -b $headBranch", $cwd);
+                // Remove yarn.lock if it exists
                 $this->runCommand('if [ -f yarn.lock ]; then rm yarn.lock; fi', $cwd);
-                // run yarn build
+                // Run `yarn build`
                 $command = implode(' && ', [
                     'export NVM_DIR=' . $homeDir . '/.nvm',
                     '. $NVM_DIR/nvm.sh',
@@ -99,64 +131,62 @@ class UpdateCommand extends BaseCommand
                     'yarn build'
                 ]);
                 $this->runCommand($command, $cwd);
-                // git operations
-                $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
-                $time = time();
-                $headBranch = "pulls/$baseBranch/update-js-$time";
-                // todo: this should be done BEFORE updating JS, in-case of accidental push on broken something
-                $this->runCommand("git checkout -b $headBranch", $cwd);
-                $this->runCommand('git add .', $cwd);
-                $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
-                $tempOrigin = "ccs-temp-$time";
-                $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
-                $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
-                $this->runCommand("git remote remove $tempOrigin", $cwd);
-                // create pr via github api
-                $result = $this->container->get(GitHubService::class)->createPullRequest(
-                    $ghrepo,
-                    $githubIssueUrl,
-                    $headBranch,
-                    $baseBranch,
-                    $output,
-                );
+                if ($dryRun) {
+                    $output->writeln('Not creating pull-request because using --dry-run option');
+                } else {
+                    // Git operations
+                    $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+                    $this->runCommand('git add .', $cwd);
+                    $this->runCommand('git commit -m "DEP Update JS dependencies"', $cwd);
+                    $tempOrigin = "ccs-temp-$time";
+                    $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
+                    $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
+                    $this->runCommand("git remote remove $tempOrigin", $cwd);
+                    // Create pull-requset via github api
+                    $result = $this->container->get(GitHubService::class)->createPullRequest(
+                        $ghrepo,
+                        $githubIssueUrl,
+                        $headBranch,
+                        $baseBranch,
+                        $output,
+                    );
+                    $this->pullRequestUrls[] = $result['html_url'];
+                }
                 $this->processedModules[] = $module;
-                $this->prUrls[] = $result['url'];
             }
         } finally {
             $output->writeln('<info>The following modules has PRs created (add to --exclude if running again):</info>');
             $processed = implode(',', $this->processedModules);
             $output->writeln("$processed");
-            $output->writeln('<info>Created the following PRs:</info>');
-            foreach ($this->prUrls as $url) {
-                $output->writeln("- $url");
+            if (!$dryRun) {
+                $output->writeln('<info>Created the following PRs:</info>');
+                foreach ($this->pullRequestUrls as $url) {
+                    $output->writeln("- $url");
+                }
             }
         }
         return Command::SUCCESS;
     }
 
-    private function validateBranches(array $modules): void
+    /**
+     * Gets the working directory for a given module.
+     */
+    private function getCwd(string $module)
     {
-        // todo: validate that if 'others', that admin branchs in pulls/3/... 
-        foreach ($modules as $module) {
-            $cwd = $this->getCwd($module);
-            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
-            if (!preg_match('#^\d(\.\d)?$#', $baseBranch)) {
-                throw new RuntimeException("Starting branch for $cwd is $baseBranch, it must be either `x` or `x.y`");
-            }
-        }
+        $vendorDir = dirname(dirname(dirname(dirname(__DIR__))));
+        return "$vendorDir/$module";
     }
 
-    private function validateInputs(): void
+    /**
+     * Get the users home dir, only works on unix-like systems (Linux, macOS)
+     */
+    private function getHomeDir(): ?string
     {
-        $which = $this->input->getArgument('which');
-        if (!in_array($which, ['admin', 'others'])) {
-            throw new InvalidArgumentException('Argument `which` must be "admin" or "others"');
+        $home = getenv('HOME');
+        if (empty($home)) {
+            throw new RuntimeException('Could not get HOME dir');
         }
-        $githubIssueUrl = $this->input->getArgument('githubIssueUrl');
-        $rx = '#^https://github.com/([a-zA-Z0-9_\-]+)/([a-zA-Z0-9_\-\.]+)/issues/(\d+)$#';
-        if (!preg_match($rx, $githubIssueUrl)) {
-            throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid github issue url');
-        }
+        return $home;
     }
 
     /**
@@ -175,7 +205,7 @@ class UpdateCommand extends BaseCommand
         return array_filter(
             $moduleService->getSupportedJsModules('packagist'),
             function (string $module) use ($moduleService, $only, $exclude) {
-                if ($module === 'siverstripe/admin') {
+                if ($module === 'silverstripe/admin') {
                     return false;
                 }
                 $ghrepo = $moduleService->getGitHubFromModule($module);
@@ -189,12 +219,6 @@ class UpdateCommand extends BaseCommand
                 return true;
             }
         );
-    }
-
-    private function getCwd(string $module)
-    {
-        $vendorDir = dirname(dirname(dirname(dirname(__DIR__))));
-        return "$vendorDir/$module";
     }
 
     /**
@@ -222,14 +246,43 @@ class UpdateCommand extends BaseCommand
     }
 
     /**
-     * Get the users home dir, only works on unix-like systems (Linux, macOS)
+     * Validates that the current branch in each module directory is a valid release branch.
      */
-    private function getHomeDir(): ?string
+    private function validateBranches(array $modules): void
     {
-        $home = getenv('HOME');
-        if (empty($home)) {
-            throw new RuntimeException('Could not get HOME dir');
+        // todo: validate that if 'others', that admin branchs in pulls/3/...
+        foreach ($modules as $module) {
+            $cwd = $this->getCwd($module);
+            $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
+            if (!preg_match('#^\d(\.\d)?$#', $baseBranch)) {
+                throw new RuntimeException("Starting branch for $cwd is $baseBranch, it must be either `x` or `x.y`");
+            }
         }
-        return $home;
+    }
+
+    /**
+     * Validates that required env variables are valid
+     */
+    private function validateEnv(): void
+    {
+        if (empty($_ENV['GITHUB_TOKEN'])) {
+            throw new InvalidArgumentException('env var GITHUB_TOKEN is missing');
+        }
+    }
+
+    /**
+     * Validates the 'which' and 'githubIssueUrl' arguments.
+     */
+    private function validateInputs(): void
+    {
+        $which = $this->input->getArgument('which');
+        if (!in_array($which, ['admin', 'others'])) {
+            throw new InvalidArgumentException('Argument `which` must be "admin" or "others"');
+        }
+        $githubIssueUrl = $this->input->getArgument('githubIssueUrl');
+        $rx = '#^https://github.com/([a-zA-Z0-9_\-]+)/([a-zA-Z0-9_\-\.]+)/issues/(\d+)$#';
+        if (!preg_match($rx, $githubIssueUrl)) {
+            throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid github issue url');
+        }
     }
 }

@@ -12,8 +12,14 @@ use Symfony\Component\Console\Attribute\AsCommand;
 )]
 class BaseCommand extends Command
 {
+    /**
+     * An instance of ContainerInterface
+     */
     protected ContainerInterface $container;
     
+    /**
+     * Sets the container property.
+     */
     public function __construct(ContainerInterface $container)
     {
         $this->container = $container;

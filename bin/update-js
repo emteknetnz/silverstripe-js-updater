@@ -16,11 +16,8 @@ $githubToken = getenv('GITHUB_TOKEN');
 if ($githubToken) {
     $_ENV['GITHUB_TOKEN'] = $githubToken;
 }
-if (empty($_ENV['GITHUB_TOKEN'])) {
-    $this->output->writeln('<error>env var GITHUB_TOKEN is missing</error>');
-    exit(1);
-}
 
+// Create dependency injection container
 $container = new ContainerBuilder();
 $fileLocator = new FileLocator(__DIR__ . '/../config/');
 $loader = new YamlFileLoader($container, $fileLocator);
