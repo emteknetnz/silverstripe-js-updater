@@ -3,10 +3,9 @@
 
 require_once __DIR__ . '/../../../autoload.php';
 
+use emteknetnz\JsUpdater\Commands\ShowCommand;
+use emteknetnz\JsUpdater\Commands\UpdateCommand;
 use Symfony\Component\Console\Application;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
-use Symfony\Component\Config\FileLocator;
 use Symfony\Component\Dotenv\Dotenv;
 
 // Allow passing in GITHUB_TOKEN as cli arg e.g. GITHUB_TOKEN=<token> vendor/bin/update-js
@@ -17,24 +16,7 @@ if ($githubToken) {
     $_ENV['GITHUB_TOKEN'] = $githubToken;
 }
 
-// Create dependency injection container
-$container = new ContainerBuilder();
-$fileLocator = new FileLocator(__DIR__ . '/../config/');
-$loader = new YamlFileLoader($container, $fileLocator);
-$loader->load('services.yml');
-$container->compile();
-
 $app = new Application();
-
-// Dynamically add all commands
-$commandsDir = __DIR__ . '/../src/Commands';
-$commandFiles = scandir($commandsDir);
-foreach ($commandFiles as $commandFile) {
-    if (!str_ends_with($commandFile, 'Command.php')) {
-        continue;
-    }
-    $class = 'emteknetnz\\JsUpdater\\Commands\\' . str_replace('.php', '', $commandFile);
-    $app->add(new $class($container));
-}
-
+$app->add(new ShowCommand);
+$app->add(new UpdateCommand);
 $app->run();

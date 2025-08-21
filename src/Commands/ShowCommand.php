@@ -12,7 +12,7 @@ use Symfony\Component\Console\Output\OutputInterface;
     name: 'show',
     description: 'Show all supported modules in current project with a package.json file',
 )]
-class ShowCommand extends BaseCommand
+class ShowCommand extends Command
 {
     /**
      * Defines the command options.

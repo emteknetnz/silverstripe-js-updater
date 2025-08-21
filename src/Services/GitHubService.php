@@ -29,14 +29,15 @@ class GitHubService
     ];
 
     /**
+     * Client for communicating with GitHub API
+     */
+    private Client $githubClient;
+
+    /**
      * Authenticates the GitHub client.
      */
-    public function __construct(
-        /**
-         * An instance of the GitHub client
-         */
-        private Client $githubClient
-    ) {
+    public function __construct() {
+        $this->githubClient = new Client;
         $this->githubClient->authenticate($_ENV['GITHUB_TOKEN'], null, AuthMethod::ACCESS_TOKEN);
     }
 

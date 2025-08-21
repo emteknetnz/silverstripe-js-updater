@@ -4,15 +4,15 @@
     "description": "JS Updater for Silverstripe CMS",
     "license": "MIT",
     "require": {
-        "knplabs/github-api": "*",
-        "nyholm/psr7": "*",
-        "silverstripe/supported-modules": "*",
-        "symfony/console": "*",
-        "symfony/process": "*",
-        "symfony/dotenv": "*",
-        "symfony/http-client": "*",
-        "symfony/config": "*",
-        "symfony/yaml": "*"
+        "knplabs/github-api": "^3",
+        "guzzlehttp/guzzle": "^7",
+        "silverstripe/supported-modules": "^1 || ^2",
+        "symfony/console": "^6 || ^7",
+        "symfony/process": "^6 || ^7",
+        "symfony/dotenv": "^6 || ^7"
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^3"
     },
     "autoload": {
         "psr-4": {
@@ -23,7 +23,8 @@
         "bin/update-js"
     ],
     "scripts": {
-        "update-js": "bin/update-js"
+        "update-js": "bin/update-js",
+        "lint": "phpcs"
     },
     "minimum-stability": "dev",
     "prefer-stable": true

@@ -14,12 +14,13 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Console\Input\InputOption;
 
 #[AsCommand(
     name: 'update',
     description: 'Update supported modules in current project',
 )]
-class UpdateCommand extends BaseCommand
+class UpdateCommand extends Command
 {
     /**
      * An instance of InputInterface
@@ -72,7 +73,7 @@ class UpdateCommand extends BaseCommand
         $this->addOption(
             'dry-run',
             'd',
-            InputArgument::OPTIONAL,
+            InputOption::VALUE_NONE,
             'Do not create pull requests',
         );
     }
@@ -91,8 +92,11 @@ class UpdateCommand extends BaseCommand
         $githubIssueUrl = $input->getArgument('githubIssueUrl');
         $homeDir = $this->getHomeDir();
         $modules = $this->getModules($input);
+        if (empty($modules)) {
+            throw new InvalidArgumentException('No valid modules found, check --only and --exclude options');
+        }
         $this->validateBranches($modules);
-        $moduleService = $this->container->get(ModuleService::class);
+        $moduleService = new ModuleService;
         // Set which modules will be updated based on input arg
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
         if ($which == 'others') {
@@ -132,7 +136,7 @@ class UpdateCommand extends BaseCommand
                 ]);
                 $this->runCommand($command, $cwd);
                 if ($dryRun) {
-                    $output->writeln('Not creating pull-request because using --dry-run option');
+                    $output->writeln('<comment>Not creating pull-requests because using --dry-run option</comment>');
                 } else {
                     // Git operations
                     $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
@@ -142,8 +146,8 @@ class UpdateCommand extends BaseCommand
                     $this->runCommand("git remote add $tempOrigin git@github.com:creative-commoners/$repoName", $cwd);
                     $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
                     $this->runCommand("git remote remove $tempOrigin", $cwd);
-                    // Create pull-requset via github api
-                    $result = $this->container->get(GitHubService::class)->createPullRequest(
+                    // Create pull-request via github api
+                    $result = (new GitHubService)->createPullRequest(
                         $ghrepo,
                         $githubIssueUrl,
                         $headBranch,
@@ -200,8 +204,7 @@ class UpdateCommand extends BaseCommand
         }
         $only = array_filter(explode(',', $this->input->getOption('only') ?: ''));
         $exclude = array_filter(explode(',', $this->input->getOption('exclude') ?: ''));
-        /** @var ModuleService $moduleService */
-        $moduleService = $this->container->get(ModuleService::class);
+        $moduleService = new ModuleService;
         return array_filter(
             $moduleService->getSupportedJsModules('packagist'),
             function (string $module) use ($moduleService, $only, $exclude) {
