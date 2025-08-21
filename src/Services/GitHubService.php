@@ -10,7 +10,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class GitHubService
 {
     /**
-     * This is the github account that forks are made to
+     * This is the GitHub account that forks are made to
      */
     private const FORK_GITHUB_ACCOUNT = 'creative-commoners';
 
@@ -20,7 +20,7 @@ class GitHubService
     private const PR_TITLE = 'DEP Update JS dependencies';
 
     /**
-     * Array of supported modules that have not been migrated to the silverstripe account
+     * Array of supported modules that have not been migrated to the silverstripe account.
      */
     private const NON_MIGRATED_GH_REPOS = [
         'bringyourownideas/silverstripe-maintenance',
@@ -60,7 +60,7 @@ class GitHubService
         $head = "$forkAccount:$headBranch";
         $message = "Creating pull request to '$account/$repoName' with head '$head' and base '$baseBranch'";
         $output->writeln("<info>$message</info>");
-        /** @var PullRequest $pullRequest */
+        /** @var \Github\Api\PullRequest $pullRequest */
         $pullRequest = $this->githubClient->api('pull_request');
         return $pullRequest->create($account, $repoName, [
             'title' => GitHubService::PR_TITLE,

@@ -61,13 +61,13 @@ class UpdateCommand extends Command
         $this->addOption(
             'only',
             'o',
-            InputArgument::OPTIONAL,
+            InputOption::VALUE_OPTIONAL,
             'Comma-separated list of repos to only run on, e.g., silverstripe-elemental,silverstripe-asset-admin',
         );
         $this->addOption(
             'exclude',
             'e',
-            InputArgument::OPTIONAL,
+            InputOption::VALUE_OPTIONAL,
             'Comma-separated list of repos to exclude, e.g., silverstripe-elemental,silverstripe-asset-admin',
         );
         $this->addOption(
@@ -86,7 +86,7 @@ class UpdateCommand extends Command
         $this->input = $input;
         $this->output = $output;
         $this->validateEnv();
-        $this->validateInputs($input);
+        $this->validateInputs();
         $which = $input->getArgument('which');
         $dryRun = $input->getOption('dry-run');
         $githubIssueUrl = $input->getArgument('githubIssueUrl');
@@ -99,7 +99,7 @@ class UpdateCommand extends Command
         $moduleService = new ModuleService();
         // Set which modules will be updated based on input arg
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
-        if ($which == 'others') {
+        if ($which === 'others') {
             /** @var QuestionHelper $helper */
             $helper = $this->getHelper('question');
             $question = new ConfirmationQuestion(
@@ -159,7 +159,7 @@ class UpdateCommand extends Command
                 $this->processedModules[] = $module;
             }
         } finally {
-            $output->writeln('<info>The following modules has PRs created (add to --exclude if running again):</info>');
+            $output->writeln('<info>The following modules have PRs created (add to --exclude if running again):</info>');
             $processed = implode(',', $this->processedModules);
             $output->writeln("$processed");
             if (!$dryRun) {
@@ -182,7 +182,7 @@ class UpdateCommand extends Command
     }
 
     /**
-     * Get the users home dir, only works on unix-like systems (Linux, macOS)
+     * Get the user's home dir, only works on unix-like systems (Linux, macOS)
      */
     private function getHomeDir(): ?string
     {
@@ -194,7 +194,7 @@ class UpdateCommand extends Command
     }
 
     /**
-     * Get an array of modules aka packagist identifiers e.g. silverstripe/asset-admin
+     * Gets an array of modules (packagist identifiers) e.g. silverstripe/asset-admin
      */
     private function getModules(): array
     {
@@ -264,7 +264,7 @@ class UpdateCommand extends Command
      */
     private function validateBranches(array $modules): void
     {
-        // todo: validate that if 'others', that admin branchs in pulls/3/...
+        // todo: validate that if 'others', that admin branches in pulls/3/...
         foreach ($modules as $module) {
             $cwd = $this->getCwd($module);
             $baseBranch = $this->runCommand('git rev-parse --abbrev-ref HEAD', $cwd, false);
@@ -275,7 +275,7 @@ class UpdateCommand extends Command
     }
 
     /**
-     * Validates that required env variables are valid
+     * Validates that required environment variables are set
      */
     private function validateEnv(): void
     {
@@ -296,7 +296,7 @@ class UpdateCommand extends Command
         $githubIssueUrl = $this->input->getArgument('githubIssueUrl');
         $rx = '#^https://github.com/([a-zA-Z0-9_\-]+)/([a-zA-Z0-9_\-\.]+)/issues/(\d+)$#';
         if (!preg_match($rx, $githubIssueUrl)) {
-            throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid github issue url');
+            throw new InvalidArgumentException('Argument `githubIssueUrl` is not a valid GitHub issue URL');
         }
     }
 }

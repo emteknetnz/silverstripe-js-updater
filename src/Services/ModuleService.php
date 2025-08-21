@@ -21,7 +21,7 @@ class ModuleService
     }
 
     /**
-     * Gets the github repository name from the module name
+     * Gets the GitHub repository name from the module name
      */
     public function getGitHubFromModule(string $module)
     {
@@ -34,7 +34,7 @@ class ModuleService
     }
 
     /**
-     * Gets the module name from the github repository name
+     * Gets the module name from the GitHub repository name
      */
     public function getModuleFromGitHub(string $github)
     {
@@ -47,7 +47,7 @@ class ModuleService
     }
 
     /**
-     * Return an array of all supported modules with a package.json file that exist in a vendor folder
+     * Returns an array of all supported modules with a package.json file that exist in a vendor folder
      */
     public function getSupportedJsModules(): array
     {
