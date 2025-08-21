@@ -32,7 +32,7 @@ class ShowCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $as = $input->getOption('github') ? 'github' : 'packagist';
-        $modules = (new ModuleService)->getSupportedJsModules($as);
+        $modules = (new ModuleService())->getSupportedJsModules($as);
         foreach ($modules as $module) {
             $output->writeln($module);
         }

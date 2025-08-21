@@ -36,8 +36,9 @@ class GitHubService
     /**
      * Authenticates the GitHub client.
      */
-    public function __construct() {
-        $this->githubClient = new Client;
+    public function __construct()
+    {
+        $this->githubClient = new Client();
         $this->githubClient->authenticate($_ENV['GITHUB_TOKEN'], null, AuthMethod::ACCESS_TOKEN);
     }
 

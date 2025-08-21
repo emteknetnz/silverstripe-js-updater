@@ -96,7 +96,7 @@ class UpdateCommand extends Command
             throw new InvalidArgumentException('No valid modules found, check --only and --exclude options');
         }
         $this->validateBranches($modules);
-        $moduleService = new ModuleService;
+        $moduleService = new ModuleService();
         // Set which modules will be updated based on input arg
         // Ensure the silverstripe/admin PR is green in CI before updating JS in other modules
         if ($which == 'others') {
@@ -147,7 +147,7 @@ class UpdateCommand extends Command
                     $this->runCommand("git push $tempOrigin $headBranch --set-upstream", $cwd);
                     $this->runCommand("git remote remove $tempOrigin", $cwd);
                     // Create pull-request via github api
-                    $result = (new GitHubService)->createPullRequest(
+                    $result = (new GitHubService())->createPullRequest(
                         $ghrepo,
                         $githubIssueUrl,
                         $headBranch,
@@ -204,7 +204,7 @@ class UpdateCommand extends Command
         }
         $only = array_filter(explode(',', $this->input->getOption('only') ?: ''));
         $exclude = array_filter(explode(',', $this->input->getOption('exclude') ?: ''));
-        $moduleService = new ModuleService;
+        $moduleService = new ModuleService();
         return array_filter(
             $moduleService->getSupportedJsModules('packagist'),
             function (string $module) use ($moduleService, $only, $exclude) {
@@ -213,10 +213,21 @@ class UpdateCommand extends Command
                 }
                 $ghrepo = $moduleService->getGitHubFromModule($module);
                 $repoName = explode('/', $ghrepo)[1];
-                if (!empty($only) && !in_array($module, $only) && !in_array($ghrepo, $only) && !in_array($repoName, $only)) {
+                if (
+                    !empty($only)
+                    && !in_array($module, $only)
+                    && !in_array($ghrepo, $only)
+                    && !in_array($repoName, $only)
+                ) {
                     return false;
                 }
-                if (!empty($exclude) && (in_array($module, $exclude) || in_array($ghrepo, $exclude) || in_array($repoName, $exclude))) {
+                if (
+                    !empty($exclude)
+                    && (in_array($module, $exclude)
+                        || in_array($ghrepo, $exclude)
+                        || in_array($repoName, $exclude)
+                    )
+                ) {
                     return false;
                 }
                 return true;
